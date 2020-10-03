@@ -1,0 +1,1 @@
+module.exports = require('@dogmajs/core/es2015');

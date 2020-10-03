@@ -1,0 +1,63 @@
+{
+  "name": "@dogmajs/monorepo",
+  "version": "0.0.31",
+  "private": true,
+  "description": "Runtime properties for TypeScript",
+  "license": "MIT",
+  "author": {
+    "name": "Ezequiel S. Pereira",
+    "email": "ezequiel@ezsper.com",
+    "url": "https://ezsper.com"
+  },
+  "keywords": [
+    "serializeable",
+    "properties",
+    "reflect-metadata",
+    "graphql",
+    "typescript"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dogmajs/dogmajs.git"
+  },
+  "main": "./dist/index.js",
+  "module": "./dist/esm/index.js",
+  "es2015": "./dist/es2015/index.js",
+  "scripts": {
+    "postinstall": "npm run packages",
+    "packages": "lerna bootstrap --hoist --force-local --contents src",
+    "packages:test": "lerna run --parallel --stream -- test",
+    "packages:build": "lerna run --parallel --stream -- build",
+    "packages:release": "lerna run --parallel --stream release",
+    "packages:link": "lerna link --force-local --contents src",
+    "packages:publish": "lerna run --parallel --stream publish",
+    "version": "ts-node ./internal/version.ts",
+    "release": "npm run packages:release",
+    "publish": "npm run version && npm run packages:publish",
+    "lint": "eslint .",
+    "test": "jest",
+    "lint:fix": "eslint . --ignore-pattern --fix"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "ts-node": "^8.6.1",
+    "rimraf": "^3.0.0",
+    "pre-commit": "^1.2.2",
+    "@types/jest": "^24.9.0",
+    "@types/node": "^12.12.17",
+    "@typescript-eslint/eslint-plugin": "^1.12.0",
+    "@typescript-eslint/parser": "^1.12.0",
+    "typescript": "^3.7.5",
+    "eslint": "^6.0.1",
+    "eslint-config-airbnb": "^17.1.1",
+    "eslint-config-prettier": "^6.0.0",
+    "eslint-plugin-prettier": "^3.1.0",
+    "jest": "^25.2.4",
+    "ts-jest": "^25.3.0",
+    "lerna": "^3.20.2",
+    "prettier": "^1.18.2"
+  },
+  "pre-commit": [
+    "release"
+  ]
+}
