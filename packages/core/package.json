@@ -1,6 +1,6 @@
 {
   "name": "@dogmajs/core",
-  "version": "0.0.32",
+  "version": "0.0.33",
   "private": true,
   "description": "Serializable object for TypeScript",
   "license": "MIT",
