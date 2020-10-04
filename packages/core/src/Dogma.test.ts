@@ -24,16 +24,21 @@ abstract class UserProfile extends Dogma.Object {
   familyName = Dogma[1].required(String);
 }
 
+
+@Dogma()
+abstract class AbstractUser extends Dogma.Object {
+  @Dogma.comment `The user id`
+  id = Dogma[0].required(String);
+  givenName = Dogma[1].required(String);
+  familyName = Dogma[2].required(String);
+}
+
 @Dogma({
   comment: 'The global user',
   implements: [UserProfile, ResourceOwner],
 })
-class User extends Dogma.Object {
-  @Dogma.comment `The user id`
-  id = Dogma[0].required(String);
+class User extends AbstractUser {
   email = Dogma[4].required(String);
-  givenName = Dogma[1].required(String);
-  familyName = Dogma[2].required(String);
   displayName = Dogma[3].optional(String, () => `${this.givenName} ${this.familyName}`);
   registeredAt = Dogma[5].optional(Date, () => new Date());
   status = Dogma[6].optional(UserStatus, UserStatus.ACTIVE);
@@ -41,6 +46,7 @@ class User extends Dogma.Object {
   phoneNumber = Dogma[8].optional(String);
   removed? = Dogma[9].optional(Boolean, false);
   parent = Dogma[10].optional(User);
+
   get shouldNotLookupToGetters() {
     throw new TypeError();
   }
@@ -56,6 +62,23 @@ describe('Dogma.getEnum', () => {
   test('registered enums must be called out by their name', () => {
     const { enumerator } = Dogma.getEnum('UserStatus');
     expect(enumerator).toBe(UserStatus);
+  });
+});
+
+describe('Dogma.getImplementations', () => {
+  test('Implementations must return constructors', () => {
+    expect(Dogma.getImplementations(User)).toStrictEqual([
+      UserProfile,
+      ResourceOwner,
+    ]);
+  });
+});
+
+describe('Dogma.iterate', () => {
+  test('iterate must return constructors', () => {
+    expect(Array.from(Dogma.iterate(User))).toStrictEqual([
+      AbstractUser,
+    ]);
   });
 });
 

@@ -306,6 +306,16 @@ function setEmit(state: boolean) {
   emit = state;
 }
 
+function *iterate<T extends DogmaObject>(target: DogmaObjectAbstract<T>) {
+  let curr: any = target;
+  while(curr = Object.getPrototypeOf(curr)) {
+    if (curr === DogmaObject) {
+      break;
+    }
+    yield curr as DogmaObjectAbstract;
+  }
+}
+
 function *iteratePropertyKeys(obj: any) {
   const allProps: any = {};
   let curr: any = obj;
@@ -324,7 +334,6 @@ function *iteratePropertyKeys(obj: any) {
       }
     }
   } while(curr = Object.getPrototypeOf(curr));
-  return allProps;
 }
 
 export interface ArrayLikePropertyDefinitions extends ArrayLike<PropertyDefinitionOutputAny> {
@@ -437,6 +446,7 @@ export abstract class DogmaObject {
   static [$dogma$]: {
     type: number;
     comment?: string;
+    implementations?: ReadonlyArray<DogmaObjectAbstract>;
     propertyComments?: Record<string, string>;
     reserved?: DogmaReserved;
   };
@@ -591,6 +601,10 @@ export function comment(template: TemplateStringsArray, ...substitutions: any[])
     }
   };
 }
+export function getImplementations<T extends DogmaObject>(constructor: DogmaObjectAbstract<T>): ReadonlyArray<DogmaObjectAbstract> | null {
+  const dogma = constructor[$dogma$];
+  return dogma && dogma.implementations || null;
+}
 
 export function getComment<T extends DogmaObject>(constructor: DogmaObjectAbstract<T>): string | null;
 export function getComment<T extends DogmaObject, K extends PropertyKeys<T>>(constructor: DogmaObjectAbstract<T>, key: K): string | null;
@@ -671,11 +685,18 @@ export interface DogmaStatic {
 
 function getDogma(target: any): any {
   if (!target.hasOwnProperty($dogma$)) {
+    let parent: any;
+    if (typeof target === 'function') {
+      parent = Object.getPrototypeOf(target)[$dogma$];
+    }
     Object.defineProperty(target, $dogma$, {
       enumerable: false,
       writable: false,
       configurable: false,
-      value: {},
+      value: {
+        ...parent,
+        ...(parent && parent.propertyComments && { propertyComments: { ...parent.propertyComments } }),
+      },
     });
   }
   return target[$dogma$];
@@ -694,12 +715,26 @@ export default Object.assign(
     }
     return <T extends PropertiesClass>(target: EnsureProperties<T>): T & { new(forge: Forge<T>): T } => {
       const options = (args[0] || {}) as DogmaClassOptions;
-      const { reserved, type } = options;
-      Object.assign(getDogma(target), {
-        type: type || (target as any).name,
-        comment: options.comment,
-        reserved,
-      });
+
+      getDogma(target).type = options.type || (target as any).name;
+
+      if (options.comment) {
+        getDogma(target).comment = options.comment;
+      }
+
+      if (options.implements) {
+        const implementations = new Set(getDogma(target).implementations);
+        if (options.implements) {
+          for (const imp of options.implements) {
+            implementations.add(imp);
+          }
+        }
+        getDogma(target).implementations = Array.from(implementations);
+      }
+
+      if (options.reserved) {
+        getDogma(target).reserved = options.reserved;
+      }
 
       if (!((target as any).prototype instanceof DogmaObject)) {
         throw new TypeError(`Target must extend Dogma.Object`);
@@ -784,6 +819,8 @@ export default Object.assign(
     getProperties,
     comment,
     getComment,
+    iterate,
+    getImplementations,
     verify,
     getEnum,
     Nullable: DogmaNullable,
