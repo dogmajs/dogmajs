@@ -92,6 +92,7 @@ export interface PropertyDefinitionRequiredOutput<T> {
   constructor: Function,
   key: string;
   type: () => T;
+  comment?: string;
   index: number;
   initialized: false;
   defaultValue?: () => ResolveType<T>;
@@ -100,6 +101,7 @@ export interface PropertyDefinitionRequiredOutput<T> {
 export interface PropertyDefinitionNullableOptionalOutput<T> {
   constructor: Function,
   key: string;
+  comment?: string;
   type: () => DogmaNullableMember<T>;
   index: number;
   initialized: true;
@@ -108,6 +110,7 @@ export interface PropertyDefinitionNullableOptionalOutput<T> {
 export interface PropertyDefinitionOptionalOutput<T> {
   constructor: Function,
   key: string;
+  comment?: string;
   type: () => T;
   index: number;
   initialized: true;
@@ -116,6 +119,7 @@ export interface PropertyDefinitionOptionalOutput<T> {
 export interface PropertyDefinitionNullableOutput<T> {
   constructor: Function,
   key: string;
+  comment?: string;
   type: () => DogmaNullableMember<T>;
   index: number;
   initialized: false;
@@ -344,7 +348,10 @@ const PropertyMember = function Property(this: { index: number }, type: any, ...
     const def = new PropertyDefinitionObject() as any;
     def.index = this.index;
     def.type = type;
-    def.initialized = defaultValue != null;
+    def.initialized = typeof defaultValue === 'function';
+    if (typeof defaultValue !== 'function') {
+      def.defaultValue = defaultValue;
+    }
     def.enhancers = enhancers;
     return def;
   } else {
@@ -429,6 +436,8 @@ export abstract class DogmaObject {
 
   static [$dogma$]: {
     type: number;
+    comment?: string;
+    propertyComments?: Record<string, string>;
     reserved?: DogmaReserved;
   };
 
@@ -566,10 +575,19 @@ export function comment(template: TemplateStringsArray, ...substitutions: any[])
 };
 export function comment(template: TemplateStringsArray, ...substitutions: any[]) {
   return (...args: any) => {
+    let constructor;
     if (typeof args[0] === 'function') {
-      Reflect.defineMetadata('description', String.raw(template, ...substitutions), args[0]);
+      constructor = args[0];
     } else {
-      Reflect.defineMetadata('description', String.raw(template, ...substitutions), args[0], args[1]);
+      constructor = args[0].constructor;
+    }
+    if (args.length === 1) {
+      getDogma(constructor).comment = String.raw(template, ...substitutions);
+    } else {
+      if (!getDogma(constructor).propertyComments) {
+        getDogma(constructor).propertyComments = {};
+      }
+      getDogma(constructor).propertyComments[args[1]] = String.raw(template, ...substitutions);
     }
   };
 }
@@ -577,7 +595,11 @@ export function comment(template: TemplateStringsArray, ...substitutions: any[])
 export function getComment<T extends DogmaObject>(constructor: DogmaObjectAbstract<T>): string | null;
 export function getComment<T extends DogmaObject, K extends PropertyKeys<T>>(constructor: DogmaObjectAbstract<T>, key: K): string | null;
 export function getComment(target: any, ...args: any[]) {
-  return (Reflect.getMetadata as any)('description', args.length > 0 ? target.prototype : target, ...args);
+  const dogma = target[$dogma$];
+  if (args.length === 0) {
+    return dogma && dogma.comment || null;
+  }
+  return dogma && dogma.propertyComments && dogma.propertyComments[args[0]] || null;
 }
 export function getEnum(enumerator: string): { name: string, comment: string | undefined, enumerator: { [key: number]: string } };
 export function getEnum<T extends { [key: number]: string }>(enumerator: T): { name: string, comment: string | undefined, enumerator: T };
@@ -647,18 +669,25 @@ export interface DogmaStatic {
   (enumerator: { [key: number]: string }, options: DogmaEnumOptions): void;
 }
 
+function getDogma(target: any): any {
+  if (!target.hasOwnProperty($dogma$)) {
+    Object.defineProperty(target, $dogma$, {
+      enumerable: false,
+      writable: false,
+      configurable: false,
+      value: {},
+    });
+  }
+  return target[$dogma$];
+}
+
 export default Object.assign(
   (function Dogma(...args: any[]) {
     if (args.length > 1) {
       if (isEnum(args[0])) {
         const options = args[1] as DogmaEnumOptions;
         enumerators[options.name] = args[0];
-        Object.defineProperty(args[0], $dogma$, {
-          enumerable: false,
-          writable: false,
-          configurable: false,
-          value: { ...options },
-        });
+        Object.assign(getDogma(args[0]), options);
         return;
       }
       throw new TypeError();
@@ -666,17 +695,10 @@ export default Object.assign(
     return <T extends PropertiesClass>(target: EnsureProperties<T>): T & { new(forge: Forge<T>): T } => {
       const options = (args[0] || {}) as DogmaClassOptions;
       const { reserved, type } = options;
-      if (options.comment) {
-        (comment `${options.comment}`)(target as any);
-      }
-      Object.defineProperty(DogmaObject, $dogma$, {
-        enumerable: false,
-        writable: false,
-        configurable: true,
-        value: {
-          type: type || (target as any).name,
-          reserved,
-        },
+      Object.assign(getDogma(target), {
+        type: type || (target as any).name,
+        comment: options.comment,
+        reserved,
       });
 
       if (!((target as any).prototype instanceof DogmaObject)) {
@@ -728,16 +750,10 @@ export default Object.assign(
           if (!property) {
             continue;
           }
-          const {type, index, initialized, key, ...extra} = property;
+          const {type, index, initialized, defaultValue, key, ...extra} = property;
           if (!key) {
             throw new Error(`Could not determinate property ${index}`);
           }
-          let defaultValue: any;
-          try {
-            // @ts-ignore
-            require('reflect-metadata');
-            defaultValue = Reflect.getMetadata('DefaultValue', (target as any).prototype, key);
-          } catch (error) {}
           (properties as any)[index] = {
             index,
             type,

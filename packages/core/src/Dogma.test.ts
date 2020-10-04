@@ -1,5 +1,4 @@
 /// <reference types="jest" />
-import 'reflect-metadata';
 import Dogma from './Dogma';
 
 enum UserStatus {
