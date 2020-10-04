@@ -1,6 +1,6 @@
 {
   "name": "@dogmajs/monorepo",
-  "version": "0.0.31",
+  "version": "0.0.33",
   "private": true,
   "description": "Runtime properties for TypeScript",
   "license": "MIT",
