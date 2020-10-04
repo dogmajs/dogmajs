@@ -1,6 +1,6 @@
 {
   "name": "dogmajs",
-  "version": "0.0.31",
+  "version": "0.0.32",
   "private": true,
   "description": "Serializable object for TypeScript",
   "license": "MIT",
@@ -23,18 +23,11 @@
   "module": "./dist/esm/index.js",
   "es2015": "./dist/es2015/index.js",
   "scripts": {
-    "build": "npm run generateNormalizeTuple && rimraf dist && npm run build:es2015 && npm run build:esm && npm run build:cjs",
-    "build:cjs": "tsc --project ./tsconfig.cjs.json",
-    "build:es2015": "tsc --project ./tsconfig.es2015.json",
-    "build:esm": "tsc --project ./tsconfig.esm.json",
-    "type-check": "tsc --noEmit",
     "release": "ts-node ./internal/release.ts",
-    "publish": "npm publish dist --access public",
-    "generateNormalizeTuple": "ts-node ./internal/generateNormalizeTuple.ts",
-    "pretest": "npm run build",
-    "test": "jest",
-    "lint": "eslint .",
-    "lint:fix": "eslint . --ignore-pattern --fix"
+    "publish": "npm publish dist --access public"
+  },
+  "dependencies": {
+    "@dogmajs/core": "^0.0.32"
   },
   "devDependencies": {
     "fs-extra": "^9.0.1",

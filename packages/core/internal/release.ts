@@ -1,5 +1,5 @@
 import * as path from 'path';
-import * as fs from 'fs';
+import * as fs from 'fs-extra';
 import { execSync, ExecSyncOptions } from 'child_process';
 
 const execSyncOptions: ExecSyncOptions = {
@@ -37,11 +37,5 @@ if (fs.existsSync(path.resolve(__dirname, '../LICENSE'))) {
   console.warn(`Missing \`LICENSE.md\` in ${path.resolve(__dirname, '..')}`);
 }
 
-if (fs.existsSync(path.resolve(__dirname, '../README.md'))) {
-  fs.copyFileSync(
-    path.resolve(__dirname, '../../../README.md'),
-    path.resolve(__dirname, '../dist/README.md'),
-  );
-} else {
-  console.warn(`Missing \`README.md\` in ${path.resolve(__dirname, '..')}`);
-}
+
+fs.copySync(path.resolve(__dirname, '../../../README.md'), path.resolve(__dirname, '../dist/README.md'));

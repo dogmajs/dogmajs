@@ -27,7 +27,7 @@ Dogma(UserStatus, {
 @Dogma({
   comment: `A resource owner can be an User or an Organization`,
 })
-export class ResourceOwner extends Dogma.Object {
+export abstract class ResourceOwner extends Dogma.Object {
 
   @Dogma.comment `The resource owner id`
   id = Dogma[0].required(String);
@@ -44,32 +44,32 @@ export class ResourceOwner extends Dogma.Object {
 export class User extends Dogma.Object {  
     
   @Dogma.comment `The user's id`
-  id = Dogma[0].required(String);  
+  readonly id = Dogma[0].required(String);  
   
   @Dogma.comment `The user's email`
-  email = Dogma[3].optional(String);  
+  readonly email = Dogma[3].optional(String);  
     
   @Dogma.comment `The user's given name or first name`
-  givenName = Dogma[1].required(String);  
+  readonly givenName = Dogma[1].required(String);  
     
   @Dogma.comment `The user's family name`
-  familyName = Dogma[2].required(String);  
+  readonly familyName = Dogma[2].required(String);  
   
   @Dogma.comment `The user's display name`
-  displayName = Dogma[4].optional(String, () => `${this.givenName} ${this.familyName}`);  
+  readonly displayName = Dogma[4].optional(String, () => `${this.givenName} ${this.familyName}`);  
   
   @Dogma.comment `The user's date of registration`
-  registeredAt = Dogma[5].optional(Date, () => new Date());  
+  readonly registeredAt = Dogma[5].optional(Date, () => new Date());  
     
   @Dogma.comment `The user's followers`
-  followers? = Dogma[6].repeated(User);
+  readonly followers? = Dogma[6].repeated(User);
   
   @Dogma.comment `The user's status`
-  status = Dogma[7].optional(UserStatus, UserStatus.ACTIVE);
+  readonly status = Dogma[7].optional(UserStatus, UserStatus.ACTIVE);
 
 }  
 
-const user = new User({  
+const user = User.forge({  
   id: '1',
   givenName: 'John',  
   familyName: 'Doe',  
@@ -79,7 +79,6 @@ const parsedUser = User.parse(JSON.stringify(user));
 
 if (
   parsedUser instanceof User
-    && parsedUser instanceof UserProps,
     && parsedUser.registeredAt instanceof Date // witch means it unserializes Date objects
 ) {  
   // this will be true  

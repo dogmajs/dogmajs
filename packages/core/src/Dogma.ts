@@ -8,7 +8,7 @@ import { isEnum } from './utils';
 const $dogma$ = Symbol.for('Dogma.$dogma$');
 const enumerators: any = {};
 
-export type PropertiesForgeable<T> = T extends { [$dogma$]: any; new(...args: any[]): any } ? T : never;
+export type PropertiesForgeable<T> = T extends { [$dogma$]: any; } ? T : never;
 
 export type IsProperty<T> = Exclude<T, null | undefined> extends never
   ? false
@@ -55,11 +55,11 @@ export type PropertyLikely<T> = IsProperty<T> extends true ? any : PropertyDefin
 export type AbstractProperties<T> = { [K in Exclude<keyof T, '__propertyKeys'>]?: PropertyLikely<T[K]> };
 export type PropertiesClass<T = {}> = Function & { prototype: AbstractProperties<T> }
 export type ClassMustExtendDogmaObject = { __ItMustExtendDogmaObject?: undefined };
-export type ClassMustNotBeAbstractClass = { __ItMustNotBeAnAbstractClass?: undefined };
+// export type ClassMustNotBeAbstractClass = { __ItMustNotBeAnAbstractClass?: undefined };
 export type ClassMustNotRepeatIndex<Index> = { __ItMustNotRepeatIndexes?: undefined };
-export type EnsureProperties<T extends PropertiesClass> = IsAbstractClass<T> extends true
+export type EnsureProperties<T extends PropertiesClass> = /* IsAbstractClass<T> extends true
   ? ClassMustNotBeAbstractClass
-  : MakeTupleKey<T['prototype']> extends MakeTupleKeySingle<T['prototype']>
+  : */ MakeTupleKey<T['prototype']> extends MakeTupleKeySingle<T['prototype']>
     ? PropertiesForgeable<T> extends never
       ?  ClassMustExtendDogmaObject: T
     : ClassMustNotRepeatIndex<FindRepeatedIndex<T['prototype']>>;
@@ -302,15 +302,23 @@ function setEmit(state: boolean) {
   emit = state;
 }
 
-export function getAllProperties(obj: any) {
-  const allProps: string[] = [];
+function *iteratePropertyKeys(obj: any) {
+  const allProps: any = {};
   let curr: any = obj;
   do {
+    if (curr.constructor === DogmaObject) {
+      break;
+    }
     const props = Object.getOwnPropertyNames(curr);
-    props.forEach(function(prop){
-      if (allProps.indexOf(prop) === -1)
-        allProps.push(prop)
-    })
+    for (const prop of props) {
+      const descriptor = Object.getOwnPropertyDescriptor(curr, prop);
+      if (descriptor && descriptor.value && descriptor.value instanceof PropertyDefinitionObject) {
+        if (!allProps.hasOwnProperty(prop)) {
+          allProps[prop] = true;
+          yield prop;
+        }
+      }
+    }
   } while(curr = Object.getPrototypeOf(curr));
   return allProps;
 }
@@ -341,11 +349,11 @@ const PropertyMember = function Property(this: { index: number }, type: any, ...
     return def;
   } else {
     if (!currentInstance) {
-      throw new TypeError(`Dogma[${this.index}] must be executed inside a class decorated by @Dogma`);
+      throw new Error(`Dogma[${this.index}] must be an initialized property inside a class decorated by @Dogma() and extended by Dogma.Object`);
     }
     const properties = getProperties(currentInstance.constructor);
     if (!properties) {
-      throw new TypeError();
+      throw new Error();
     }
     let defaultValue = undefined;
     const { key } = properties[this.index];
@@ -417,7 +425,7 @@ const jsonSerializer = new JSONSerializer();
 
 let forging = false;
 
-export class DogmaObject {
+export abstract class DogmaObject {
 
   static [$dogma$]: {
     type: number;
@@ -438,49 +446,49 @@ export class DogmaObject {
     return getProperties(this) as ArrayLikePropertyDefinitions;
   }
 
-  static getPropertyNames<T extends DogmaObject>(this: DogmaObjectStatic<T>): TupleKeys<T> {
+  static getPropertyNames<T extends DogmaObject>(this: DogmaObjectAbstract<T>): TupleKeys<T> {
     return Object.keys(this.getProperties().keyMap) as any;
   }
 
-  static fromValues<T extends DogmaObject>(this: DogmaObjectStatic<T>, values: TupleValues<T>) {
+  static fromValues<T extends DogmaObject>(this: DogmaObjectForgeable<T>, values: TupleValues<T>) {
     return this.serializer.fromValues(this, values);
   }
 
-  static encodeUnsigned<T extends DogmaObject>(this: DogmaObjectStatic<T>, value: T): Buffer {
+  static encodeVerified<T extends DogmaObject>(this: DogmaObjectForgeable<T>, value: T): Buffer {
     return this.serializer.encodeType(this, value);
   }
 
-  static decodeUnsigned<T extends DogmaObject>(this: DogmaObjectStatic<T>, bytes: Buffer): T {
+  static decodeVerified<T extends DogmaObject>(this: DogmaObjectForgeable<T>, bytes: Buffer): T {
     return this.serializer.decodeType(this, bytes);
   }
 
-  static encode<T extends DogmaObject>(this: DogmaObjectStatic<T>, value: T): Buffer {
-    return this.serializer.sign(this[$dogma$].type, this.encodeUnsigned(value));
+  static encode<T extends DogmaObject>(this: DogmaObjectForgeable<T>, value: T): Buffer {
+    return jsonSerializer.sign(this[$dogma$].type, this.encodeVerified(value));
   }
 
-  static decode<T extends DogmaObject>(this: DogmaObjectStatic<T>, bytes: Buffer | string, encoding?: BufferEncoding): T {
+  static decode<T extends DogmaObject>(this: DogmaObjectForgeable<T>, bytes: Buffer | string, encoding?: BufferEncoding): T {
     const { type, payload } = typeof bytes === 'string'
-      ? this.serializer.unsign(bytes, encoding)
-      : this.serializer.unsign(bytes);
+      ? jsonSerializer.verify(bytes, encoding)
+      : jsonSerializer.verify(bytes);
     if (type !== this[$dogma$].type) {
       throw new TypeError(`Invalid type`);
     }
-    return this.decodeUnsigned(payload);
+    return this.decodeVerified(payload);
   }
 
-  static parse<T extends DogmaObject>(this: DogmaObjectStatic<T>, str: string, encoding: BufferEncoding = 'base64') {
+  static parse<T extends DogmaObject>(this: DogmaObjectForgeable<T>, str: string, encoding: BufferEncoding = 'base64') {
     return this.decode(Buffer.from(str, encoding));
   }
 
-  static fromJSON<T extends DogmaObject>(this: DogmaObjectStatic<T>, json: any): T {
+  static fromJSON<T extends DogmaObject>(this: DogmaObjectForgeable<T>, json: any): T {
     return this.serializer.fromJSON(this, json) as any;
   }
 
-  static fromJSONString<T extends DogmaObject>(this: DogmaObjectStatic<T>, jsonString: string): T {
+  static fromJSONString<T extends DogmaObject>(this: DogmaObjectForgeable<T>, jsonString: string): T {
     return this.fromJSON(JSON.parse(jsonString));
   }
 
-  static forge<T extends DogmaObject>(this: DogmaObjectStatic<T>, forge: Forge<T>): T {
+  static forge<T extends DogmaObject>(this: DogmaObjectForgeable<T>, forge: Forge<T>): T {
     try {
       forging = true;
       const inst = new (this as any)(forge as any);
@@ -492,11 +500,11 @@ export class DogmaObject {
     }
   }
 
-  static stringify<T extends DogmaObject>(this: DogmaObjectStatic<T>, forge: Forge<T>, encoding?: BufferEncoding) {
+  static stringify<T extends DogmaObject>(this: DogmaObjectForgeable<T>, forge: Forge<T>, encoding?: BufferEncoding) {
     return this.forge(forge).stringify(encoding);
   }
 
-  static clone<T extends DogmaObject>(this: DogmaObjectStatic<T>, type: T, patch?: Partial<Forge<T>>): T {
+  static clone<T extends DogmaObject>(this: DogmaObjectForgeable<T>, type: T, patch?: Partial<Forge<T>>): T {
     const plain = type.toPlainObject() as any;
     return this.forge(patch ? Object.assign(plain, patch) : plain);
   }
@@ -521,13 +529,13 @@ export class DogmaObject {
     }
   }
 
-  encodeUnsigned() {
-    const type = this.constructor as DogmaObjectStatic;
-    return type.encodeUnsigned(this);
+  encodeVerified() {
+    const type = this.constructor as DogmaObjectForgeable;
+    return type.encodeVerified(this);
   }
 
   encode() {
-    const type = this.constructor as DogmaObjectStatic;
+    const type = this.constructor as DogmaObjectForgeable;
     return type.encode(this);
   }
 
@@ -536,12 +544,12 @@ export class DogmaObject {
   }
 
   toValues(): StrictTupleValues<this> {
-    const type = this.constructor as DogmaObjectStatic<this>;
+    const type = this.constructor as DogmaObjectForgeable<this>;
     return type.serializer.toValues(type, this);
   }
 
   toPlainObject(): PlainObject<this> {
-    const type = this.constructor as DogmaObjectStatic<this>;
+    const type = this.constructor as DogmaObjectForgeable<this>;
     return type.serializer.toPlainObject(type, this);
   }
 
@@ -566,8 +574,8 @@ export function comment(template: TemplateStringsArray, ...substitutions: any[])
   };
 }
 
-export function getComment<T extends DogmaObject>(constructor: DogmaObjectStatic<T>): string | null;
-export function getComment<T extends DogmaObject, K extends PropertyKeys<T>>(constructor: DogmaObjectStatic<T>, key: K): string | null;
+export function getComment<T extends DogmaObject>(constructor: DogmaObjectAbstract<T>): string | null;
+export function getComment<T extends DogmaObject, K extends PropertyKeys<T>>(constructor: DogmaObjectAbstract<T>, key: K): string | null;
 export function getComment(target: any, ...args: any[]) {
   return (Reflect.getMetadata as any)('description', args.length > 0 ? target.prototype : target, ...args);
 }
@@ -596,6 +604,12 @@ export function getEnum(enumerator: { [key: number]: string } | string) {
   };
 }
 
+export function verify(bytes: Buffer | string, encoding?: BufferEncoding) {
+  return typeof bytes === 'string'
+    ? jsonSerializer.verify(bytes, encoding)
+    : jsonSerializer.verify(bytes);
+}
+
 export type DogmaReserved = (TupleIndexes | [TupleIndexes, TupleIndexes])[];
 
 export interface DogmaOptions {
@@ -608,7 +622,7 @@ export interface DogmaEnumOptions extends DogmaOptions {
   name: string;
 }
 
-export interface DogmaClassOptions<T extends { new(...args: any[]): any } = never> extends DogmaOptions {
+export interface DogmaClassOptions<T extends PropertiesClass = never> extends DogmaOptions {
   reserved?: DogmaReserved;
   implements?: T[]
 }
@@ -620,14 +634,14 @@ export type UnionToIntersection<U> = (U extends any
   : never;
 
 
-export type ImplementsType<U> = U extends { new (...args: any[]): infer T  } ? T : never;
+export type ImplementsType<U> = U extends Function & { prototype: infer T  } ? T : never;
 
-type EnsurePropertiesImplements<T, U> = T extends { new(...args: any[]): PlainObject<UnionToIntersection<ImplementsType<U>>> }
+type EnsurePropertiesImplements<T, U> = T extends Function & { prototype: PlainObject<UnionToIntersection<ImplementsType<U>>> }
   ? EnsureProperties<T>
-  : { new(...args: any[]): Implements<UnionToIntersection<ImplementsType<U>>> };
+  : { prototype: Implements<UnionToIntersection<ImplementsType<U>>> };
 
 export interface DogmaStatic {
-  <U extends { new(...args: any[]): any }>(options?: DogmaClassOptions<U>): {
+  <U extends PropertiesClass>(options?: DogmaClassOptions<U>): {
     <T extends PropertiesClass>(target: EnsurePropertiesImplements<T, U>): T & { new(forge: Forge<T>): T };
   };
   (enumerator: { [key: number]: string }, options: DogmaEnumOptions): void;
@@ -675,27 +689,35 @@ export default Object.assign(
       }
       try {
         setEmit(true);
-        const obj = new (target as any)();
+        let obj;
+
+        try {
+          obj = new (target as any)();
+        } catch (originalError) {
+          try {
+            class Abstract extends (target as any) {}
+            obj = new Abstract();
+          } catch (error) {
+            throw originalError;
+          }
+        }
         setEmit(false);
         properties = {length: 0, keyMap: {}};
         let maxLength = 0;
-        const propKeys = getAllProperties(obj);
-        for (const key of propKeys) {
-          const prop = obj[key];
-          if (prop instanceof PropertyDefinitionObject) {
-            (prop as any).key = key;
-            (prop as any).constructor = target;
-            (properties as any)[(prop as any).index] = prop;
-            (properties as any).length = Math.max(properties.length, (prop as any).index + 1);
-            if ((prop as any).enhancers) {
-              const {enhancers} = (prop as any);
-              delete (prop as any).enhancers;
-              for (const enhancer of enhancers) {
-                if (typeof enhancer.enhance === 'function') {
-                  enhancer.enhance(prop);
-                } else {
-                  Object.assign(prop, enhancer);
-                }
+        for (const key of iteratePropertyKeys(obj)) {
+          const prop = obj[key] as PropertyDefinitionObject;
+          (prop as any).key = key;
+          (prop as any).constructor = target;
+          (properties as any)[(prop as any).index] = prop;
+          (properties as any).length = Math.max(properties.length, (prop as any).index + 1);
+          if ((prop as any).enhancers) {
+            const {enhancers} = (prop as any);
+            delete (prop as any).enhancers;
+            for (const enhancer of enhancers) {
+              if (typeof enhancer.enhance === 'function') {
+                enhancer.enhance(prop);
+              } else {
+                Object.assign(prop, enhancer);
               }
             }
           }
@@ -746,14 +768,18 @@ export default Object.assign(
     getProperties,
     comment,
     getComment,
+    verify,
     getEnum,
     Nullable: DogmaNullable,
     Object: DogmaObject,
   },
 );
 
-export type DogmaObjectStatic<T extends DogmaObject = DogmaObject> = { [K in Exclude<keyof typeof DogmaObject, 'prototype'>]: (typeof DogmaObject)[K] }
+export type DogmaObjectForgeable<T extends DogmaObject = DogmaObject> = { [K in Exclude<keyof typeof DogmaObject, 'prototype'>]: (typeof DogmaObject)[K] }
   & { new(): T };
+
+export type DogmaObjectAbstract<T extends DogmaObject = DogmaObject> = Function & { [K in Exclude<keyof typeof DogmaObject, 'prototype'>]: (typeof DogmaObject)[K] }
+  & { prototype: T };
 
 export type PlainObject<T> = {
   [K in OptionalInlinePropertyKeys<T>]-?: K extends NullablePropertyKeys<T> ? OmitDefinition<T[K]> | null : OmitDefinition<T[K]>

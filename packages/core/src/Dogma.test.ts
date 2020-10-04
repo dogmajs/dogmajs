@@ -6,28 +6,25 @@ enum UserStatus {
   ACTIVE = 1,
   INACTIVE = 2
 }
-console.time('enum');
+
 Dogma(UserStatus, {
   name: 'UserStatus',
   comment: 'The user statuses',
 });
-console.timeEnd('enum');
 
-console.time('ResourceOwner');
 @Dogma()
-class ResourceOwner extends Dogma.Object {
+abstract class ResourceOwner extends Dogma.Object {
+  @Dogma.comment `The Resource Owner id`
   id = Dogma[0].required(String);
   displayName = Dogma[1].required(String);
 }
 
-console.timeEnd('ResourceOwner');
 @Dogma()
-class UserProfile extends Dogma.Object {
+abstract class UserProfile extends Dogma.Object {
   givenName = Dogma[0].required(String);
   familyName = Dogma[1].required(String);
 }
 
-console.time('User');
 @Dogma({
   comment: 'The global user',
   implements: [UserProfile, ResourceOwner],
@@ -45,8 +42,10 @@ class User extends Dogma.Object {
   phoneNumber = Dogma[8].optional(String);
   removed? = Dogma[9].optional(Boolean, false);
   parent = Dogma[10].optional(User);
+  get shouldNotLookupToGetters() {
+    throw new TypeError();
+  }
 }
-console.timeEnd('User');
 
 describe('Dogma.getEnum', () => {
   test('registered enums must be called out by thyself', () => {
@@ -68,6 +67,7 @@ describe('Dogma#getComment', () => {
 
   test('property must have description', () => {
     expect(Dogma.getComment(User, 'id')).toBe('The user id');
+    expect(Dogma.getComment(ResourceOwner, 'id')).toBe('The Resource Owner id');
   });
 });
 
@@ -87,6 +87,14 @@ describe('DogmaObject#getPropertyNames', () => {
       'phoneNumber',
       'removed',
       'parent',
+    ]);
+  });
+  test('abstract classes must have property names', () => {
+    expect(
+      ResourceOwner.getPropertyNames(),
+    ).toStrictEqual([
+      'id',
+      'displayName',
     ]);
   });
 });
@@ -239,6 +247,7 @@ describe('Factory', () => {
     expect(parsedUser.registeredAt === registeredAt).toBe(false);
     expect(parsedUser.registeredAt).toStrictEqual(registeredAt);
     expect(parsedUser.status).toBe(UserStatus.ACTIVE);
+    expect(Dogma.verify(str).type).toBe('User');
   });
 });
 
